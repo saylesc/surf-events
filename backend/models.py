@@ -31,8 +31,8 @@ def setup_db(app, database_path=database_path):
 '''
 Surf Spot / Surf Location
 '''
-class SurfLocation(db.Model):
-  __tablename__ = 'surf_location'
+class SurfSpot(db.Model):
+  __tablename__ = 'SurfSpot'
 
   id = Column(db.Integer, primary_key=True)
   name = Column(db.String)
@@ -41,14 +41,28 @@ class SurfLocation(db.Model):
   country = Column(db.String)
   wave_type = Column(db.String)
   contests = db.relationship(
-    'surf_contest',
+    'SurfContest',
     backref='surf_spot',
     lazy=True
   )
 
-  def __init__(self, name, catchphrase=""):
+  def __init__(self, name, city, state, country, waveType):
     self.name = name
-    self.catchphrase = catchphrase
+    self.city = city
+    self.state = state
+    self.country = country
+    self.wave_type = waveType
+
+  def insert(self):
+    db.session.add(self)
+    db.session.commit()
+
+  def update(self):
+    db.session.commit()
+
+  def delete(self):
+    db.session.delete(self)
+    db.session.commit()
 
   def format(self):
     return {
@@ -63,18 +77,18 @@ class SurfLocation(db.Model):
 Surf Contests
 '''
 class SurfContest(db.Model):
-  __tablename__ = 'surf_contest'
+  __tablename__ = 'SurfContest'
 
   id = db.Column(db.Integer, primary_key=True)
   contestName = db.Column(db.String, nullable=False)
   contestDate = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now())
-  # Foreign key reference to this contest's surf spot/location/venue
+  # Foreign key reference to this contest's surf spot/location
   surfSpotId = db.Column(
     db.Integer,
-    db.ForeignKey('SurfLocation.id'),
+    db.ForeignKey('SurfSpot.id'),
     nullable=False)
   surfers = db.relationship(
-    'Surfer', secondary=surf_contests, backref=db.backref('contests', lazy=True)
+    'Surfer', secondary=surfer_contests, backref=db.backref('contests', lazy=True)
   )
 
   def __init__(self, name, date, spotId):
@@ -96,9 +110,15 @@ class SurfContest(db.Model):
   def format(self):
     return {
       'id': self.id,
+      'contest_name': self.contestName,
       'contest_date': self.contestDate
-      'contest_name': self.contestName
     }
+
+''' This is an intermediate table to connect the surfers to the contests'''
+surfer_contests = db.Table('surfer_contests',
+  db.Column('surfer_id', db.Integer, db.ForeignKey('Surfer.id'), primary_key=True),
+  db.Column('contest_id', db.Integer, db.ForeignKey('SurfContest.id'), primary_key=True)
+)
 
 '''
 Surfers
@@ -134,9 +154,9 @@ class Surfer(db.Model):
   def format(self):
     return {
       'id': self.id,
-      'surfer_name': self.name
-      'surfer_age': self.age
-      'surfer_stance': self.stance
-      'surfer_hometown': self.hometown
+      'surfer_name': self.name,
+      'surfer_age': self.age,
+      'surfer_stance': self.stance,
+      'surfer_hometown': self.hometown,
       'surfer_ranking': self.ranking
     }
