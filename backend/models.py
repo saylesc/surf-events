@@ -73,6 +73,12 @@ class SurfSpot(db.Model):
       'country': self.country,
       'wave_type': self.wave_type}
 
+''' This is an intermediate table to connect the surfers to the contests'''
+surfer_contests = db.Table('surfer_contests',
+  db.Column('surfer_id', db.Integer, db.ForeignKey('Surfer.id'), primary_key=True),
+  db.Column('contest_id', db.Integer, db.ForeignKey('SurfContest.id'), primary_key=True)
+)
+
 '''
 Surf Contests
 '''
@@ -114,17 +120,11 @@ class SurfContest(db.Model):
       'contest_date': self.contestDate
     }
 
-''' This is an intermediate table to connect the surfers to the contests'''
-surfer_contests = db.Table('surfer_contests',
-  db.Column('surfer_id', db.Integer, db.ForeignKey('Surfer.id'), primary_key=True),
-  db.Column('contest_id', db.Integer, db.ForeignKey('SurfContest.id'), primary_key=True)
-)
-
 '''
 Surfers
 '''
 class Surfer(db.Model):
-  __tablename__ = 'surfer'
+  __tablename__ = 'Surfer'
 
   id = db.Column(db.Integer, primary_key=True)
   name = db.Column(db.String, nullable=False)
