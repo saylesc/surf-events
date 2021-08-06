@@ -25,7 +25,6 @@ def setup_db(app, database_path=database_path):
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     db.app = app
     db.init_app(app)
-    # db.create_all()
     migrate = Migrate(app, db)
 
 '''
@@ -35,23 +34,27 @@ class SurfSpot(db.Model):
   __tablename__ = 'SurfSpot'
 
   id = Column(db.Integer, primary_key=True)
-  name = Column(db.String)
-  city = Column(db.String)
+  name = Column(db.String, nullable=False)
+  city = Column(db.String, nullable=False)
+
+  # Some international spots don't identify with a State
   state = Column(db.String)
-  country = Column(db.String)
+  country = Column(db.String, nullable=False)
   wave_type = Column(db.String)
+  wave_image = Column(db.String(500))
   contests = db.relationship(
     'SurfContest',
     backref='surf_spot',
     lazy=True
   )
 
-  def __init__(self, name, city, state, country, waveType):
+  def __init__(self, name, city, state, country, waveType, waveImage):
     self.name = name
     self.city = city
     self.state = state
     self.country = country
     self.wave_type = waveType
+    self.wave_image = waveImage
 
   def insert(self):
     db.session.add(self)
@@ -71,7 +74,8 @@ class SurfSpot(db.Model):
       'city': self.city,
       'state': self.state,
       'country': self.country,
-      'wave_type': self.wave_type}
+      'wave_type': self.wave_type,
+      'wave_image': self.wave_image}
 
 ''' This is an intermediate table to connect the surfers to the contests'''
 surfer_contests = db.Table('surfer_contests',
@@ -86,8 +90,9 @@ class SurfContest(db.Model):
   __tablename__ = 'SurfContest'
 
   id = db.Column(db.Integer, primary_key=True)
-  contestName = db.Column(db.String, nullable=False)
-  contestDate = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now())
+  contest_name = db.Column(db.String, nullable=False)
+  contest_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now())
+  contest_image = Column(db.String(500))
   # Foreign key reference to this contest's surf spot/location
   surfSpotId = db.Column(
     db.Integer,
@@ -97,9 +102,10 @@ class SurfContest(db.Model):
     'Surfer', secondary=surfer_contests, backref=db.backref('contests', lazy=True)
   )
 
-  def __init__(self, name, date, spotId):
-    self.contestName = name
-    self.contestDate = date
+  def __init__(self, name, date, image, spotId):
+    self.contest_name = name
+    self.contest_date = date
+    self.contest_image = image
     self.surfSpotId = spotId
 
   def insert(self):
@@ -116,8 +122,9 @@ class SurfContest(db.Model):
   def format(self):
     return {
       'id': self.id,
-      'contest_name': self.contestName,
-      'contest_date': self.contestDate
+      'contest_name': self.contest_name,
+      'contest_date': self.contest_date,
+      'contest_image': self.contest_image
     }
 
 '''
