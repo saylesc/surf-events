@@ -4,7 +4,7 @@
 
 ## PUBLIC API
 
-Anyone can:
+#### Anyone can:
 
 - View Surf Contests
 - View Specific Surf Contests
@@ -15,7 +15,7 @@ Anyone can:
 
 ## Surf Coordinators
 
-Surf Coordinators can perform all Public API calls plus the following:
+#### Surf Coordinators can perform all Public API calls plus the following:
 
 - Create Surf Contests
 - Cancel (Delete) Surf Contests
@@ -25,7 +25,7 @@ Surf Coordinators can perform all Public API calls plus the following:
 
 ## Surf Manager
 
-Surf Managers can perform all Public API calls plus the following:
+#### Surf Managers can perform all Public API calls plus the following:
 
 - Enter surfers into Surf Contests
 - Remove surfers from a Surf Contest
