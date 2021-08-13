@@ -13,19 +13,20 @@
 - Search for Surfers
 - View Individual Surfer Info
 
-## Surf Coordinators
-
-#### Surf Coordinators can perform all Public API calls plus the following:
-
-- Create Surf Contests
-- Cancel (Delete) Surf Contests
-- Add new Surf Spots to host Contests
-- Remove Surf Spots (Delete) from the tour
-- Enter surfers into Surf Contests
-
 ## Surf Manager
 
 #### Surf Managers can perform all Public API calls plus the following:
 
 - Enter surfers into Surf Contests
 - Remove surfers from a Surf Contest
+
+## Surf Coordinators
+
+#### Surf Coordinators can perform all Public API calls plus the following:
+
+- Create Surf Contests
+- Cancel (Delete) Surf Contests
+- Edit Surf Contest details
+- Add new Surf Spots to host Contests
+- Remove Surf Spots (Delete) from the tour
+- Enter / Remove surfers into Surf Contests
