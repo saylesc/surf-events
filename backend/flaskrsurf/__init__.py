@@ -1,7 +1,7 @@
 import os, sys
 from flask import Flask, request, jsonify, abort
-from models import setup_db, SurfSpot, Surfer, SurfContest
-# TODO: from .auth.auth import AuthError, requires_auth
+from models import setup_db, rollback_db, SurfSpot, Surfer, SurfContest
+from auth.auth import AuthError, requires_auth
 from flask_cors import CORS
 
 def create_app(test_config=None):
@@ -14,6 +14,12 @@ def create_app(test_config=None):
 
     ## PUBLIC GET API
     ''' The default GET API's for any public user'''
+    @app.route('/login')
+    def hello_home():
+        return jsonify({
+            "success": True,
+            "message": "Hello! From the Surf Events page"
+        })
 
     ### GET SURFERS
     @app.route('/surfers', methods=['GET'])
@@ -100,6 +106,26 @@ def create_app(test_config=None):
                 "message": "Could not get contest"
             })
 
+    ### GET specific SURF Spots
+    @app.route('/surf_spots/<int:spot_id>')
+    def get_surf_spot(spot_id):
+        try:
+            spot = SurfSpot.query.get(spot_id)
+
+            if not spot:
+                abort(404)
+
+            return jsonify({
+                "success": True,
+                "surf_spot": spot.format()
+            })
+        except:
+            # TODO: throw better error
+            return jsonify({
+                "success": False,
+                "message": "Could not get contest"
+            })
+
 
     ### GET specific SURF Contests hosted at a specific spot
     @app.route('/surf_spots/<int:spot_id>/contests', methods=['GET'])
@@ -148,48 +174,205 @@ def create_app(test_config=None):
         except:
             error = True
 
+
     ## RESTRICTED ACCESS API
-    ''' The GET/PATCH/POST/DELETE API's for Surf Coordinator users'''
+    '''
+    The GET/PATCH/POST/DELETE API's for Surf Coordinator and Surf Manager users
+    '''
 
-    # POST route for Creating Surf Contests
-    @app.route('/surf_contest/create', methods=['POST'])
-    def create_surf_contest():
-        createError = False
-        errorDescr = ''
+    ### Surf Manager API
+    '''
+    Surf Managers can only add/remove surfers to/from a surf contest
+    '''
+
+    @app.route('/add_surf_contestant/<int:contest_id>/<int:surfer_id>', methods=['PATCH'])
+    @requires_auth('patch:add_surfer')
+    def add_surfer_to_contest(payload, contest_id, surfer_id):
         try:
-            body = request.get_json()
-            surfSpotId = body['surf_spot_id']
-            contestName = body['contest_name']
-            contestDate = body['contest_date']
-            contestImage = body['contest_image']
+            if type(payload) is AuthError:
+                return auth_error(payload)
 
-            # Find the surf spot this contest will be held at
-            surfSpot = SurfSpot.query.get(surfSpotId)
-            if surfSpot == None:
-                errorDescr += 'Surf Spot not found. '
-                createError = True
+            else:
+                contest = SurfContest.query.get(contest_id)
+                if not contest:
+                    abort(404)
 
-            if not createError:
-                print(surfSpot.name)
-                newContest = SurfContest(
-                    name=contestName,
-                    date=contestDate,
-                    image=contestImage,
-                    spotId=surfSpotId)
+                surfer = Surfer.query.get(surfer_id)
+                if not surfer:
+                    abort(404)
 
-                newContest.insert()
+                # If surfer is not already entered, enter them
+                foundContest = False
+                for surfContest in surfer.contests:
+                    if surfContest.id == contest_id:
+                        foundContest = True
 
-                surfContests = SurfContest.query.order_by(SurfContest.id).all()
-                listSurfContests = []
+                if foundContest:
+                    # TODO: Return error message here
+                    return jsonify({
+                        "success": False,
+                        "message": "Surfer already entered in contest"
+                    })
 
-                for contest in surfContests:
-                    listSurfContests.append(contest.format())
+                surfer.contests.append(contest)
+                surfer.update()
+
+                surferSearchResults = []
+                for contestSurfer in contest.surfers:
+                    surferSearchResults.append(contestSurfer.format())
+
 
                 return jsonify({
                     "success": True,
-                    "contest_count": len(surfContests),
-                    "surf_contests": listSurfContests
+                    "contest_info": contest.format(),
+                    "surfers": surferSearchResults
                 })
+        except:
+            print(sys.exc_info())
+            rollback_db()
+            abort(422)
+
+    @app.route('/remove_surf_contestant/<int:contest_id>/<int:surfer_id>', methods=['PATCH'])
+    @requires_auth('patch:remove_surfer')
+    def remove_surfer_from_contest(payload, contest_id, surfer_id):
+        try:
+            if type(payload) is AuthError:
+                return auth_error(payload)
+
+            else:
+                contest = SurfContest.query.get(contest_id)
+                if not contest:
+                    abort(404)
+
+                surfer = Surfer.query.get(surfer_id)
+                if not surfer:
+                    abort(404)
+
+                # If surfer is not already entered, enter them
+                if surfer in contest.surfers:
+                    contest.surfers.remove(surfer)
+                    contest.update()
+
+                    surferSearchResults = []
+                    for contestSurfer in contest.surfers:
+                        surferSearchResults.append(contestSurfer.format())
+
+                    return jsonify({
+                        "success": True,
+                        "contest_info": contest.format(),
+                        "surfers": surferSearchResults
+                    })
+
+                else:
+                    # TODO: Return error message here
+                    return jsonify({
+                        "success": False,
+                        "message": "Surfer is not entered in contest"
+                    })
+        except:
+            print(sys.exc_info())
+            rollback_db()
+            abort(422)
+
+
+    ### Surf Coordinator API
+
+    # POST route for adding  Surf Spots to the tour
+    @app.route('/surf_spot/create', methods=['POST'])
+    @requires_auth('post:surf_spots')
+    def create_surf_spot(payload):
+        createError = False
+        errorDescr = ''
+        try:
+            if type(payload) is AuthError:
+                return auth_error(payload)
+
+            else:
+                body = request.get_json()
+                surfSpotName = body['name']
+                surfSpotCity = body['city']
+                surfSpotState = body['state']
+                surfSpotCountry = body['country']
+                surfSpotWaveType = body['wave_type']
+                surfSpotWaveImage = body['wave_image']
+
+                # name, city, state, country, waveType, waveImage):
+                newSurfSpot = SurfSpot(
+                    name=surfSpotName,
+                    city=surfSpotCity,
+                    state=surfSpotState,
+                    country=surfSpotCountry,
+                    waveType=surfSpotWaveType,
+                    waveImage=surfSpotWaveImage)
+
+                newSurfSpot.insert()
+
+                surfSpots = SurfSpot.query.order_by(SurfSpot.id).all()
+                listSurfSpots = []
+
+                for surfSpot in surfSpots:
+                    listSurfSpots.append(surfSpot.format())
+
+                return jsonify({
+                    "success": True,
+                    "surf_spot_count": len(listSurfSpots),
+                    "surf_spots": listSurfSpots
+                })
+        except:
+            print(sys.exc_info())
+            error = True
+            errorDescr = "Error creating new Surf Spot"
+
+        # TODO: Return error code here instead
+        return jsonify({
+            "success": False,
+            "message": errorDescr
+        })
+
+    # POST route for Creating Surf Contests
+    @app.route('/surf_contest/create', methods=['POST'])
+    @requires_auth('post:surf_contests')
+    def create_surf_contest(payload):
+        createError = False
+        errorDescr = ''
+        try:
+            if type(payload) is AuthError:
+                return auth_error(payload)
+
+            else:
+                body = request.get_json()
+                surfSpotId = body['surf_spot_id']
+                contestName = body['contest_name']
+                contestDate = body['contest_date']
+                contestImage = body['contest_image']
+
+                # Find the surf spot this contest will be held at
+                surfSpot = SurfSpot.query.get(surfSpotId)
+                if surfSpot == None:
+                    errorDescr += 'Surf Spot not found. '
+                    createError = True
+
+                if not createError:
+                    print(surfSpot.name)
+                    newContest = SurfContest(
+                        name=contestName,
+                        date=contestDate,
+                        image=contestImage,
+                        spotId=surfSpotId)
+
+                    newContest.insert()
+
+                    surfContests = SurfContest.query.order_by(SurfContest.id).all()
+                    listSurfContests = []
+
+                    for contest in surfContests:
+                        listSurfContests.append(contest.format())
+
+                    return jsonify({
+                        "success": True,
+                        "contest_count": len(surfContests),
+                        "surf_contests": listSurfContests
+                    })
         except:
             print(sys.exc_info())
             error = True
@@ -201,18 +384,45 @@ def create_app(test_config=None):
             "message": errorDescr
         })
 
-    # DELETE route for removing (Cancelling/Postponing) Surf Contests
-    @app.route('/surf_contests/<int:contest_id>', methods=['DELETE'])
-    def delete_surf_contest(contest_id):
-        print("Trying to delete")
-        print(contest_id)
+    # PATCH route for Editing Surf Contests
+    @app.route('/surf_contests/<int:contest_id>', methods=['PATCH'])
+    @requires_auth('patch:surf_contest')
+    def edit_surf_contest(payload, contest_id):
+        editError = False
+        errorDescr = ''
         try:
-            surfContest = SurfContest.query.get(contest_id)
-            if surfContest is not None:
-                # Delete this contest
-                print("Deleting...")
-                surfContest.delete()
-                print("Deleted...")
+            if type(payload) is AuthError:
+                return auth_error(payload)
+
+            else:
+                # Get the json body to update the surf contest
+                body = request.get_json()
+
+                # Find the surf spot this contest will be held at
+                surfContest = SurfContest.query.get(contest_id)
+
+                if not surfContest:
+                    abort(404)
+
+                # Get the json body to update the surf contest
+                if 'surf_spot_id' in body:
+                    surfSpotId = body['surf_spot_id']
+                    surfContest.surfSpotId = surfSpotId
+
+                if 'contest_name' in body:
+                    contestName = body['contest_name']
+                    surfContest.contest_name = contestName
+
+                if 'contest_date' in body:
+                    contestDate = body['contest_date']
+                    surfContest.contest_date = contestDate
+
+                if 'contest_image' in body:
+                    contestImage = body['contest_image']
+                    surfContest.contest_image = contestImage
+
+                # Update the contest table row DB entry
+                surfContest.update()
 
                 surfContests = SurfContest.query.order_by(SurfContest.id).all()
                 listSurfContests = []
@@ -224,13 +434,165 @@ def create_app(test_config=None):
                     "success": True,
                     "contest_count": len(surfContests),
                     "surf_contests": listSurfContests
-                })
+            })
         except:
             print(sys.exc_info())
             error = True
+            errorDescr = "Error editing Surf Contest"
+
+        # TODO: Return error code here instead
+        return jsonify({
+            "success": False,
+            "message": errorDescr
+        })
+
+    '''
+    DELETE route for taking surf spots off the tour (Deleting surf spots)
+    This should cascade remove all contests associated with this surf spot
+    '''
+    @app.route('/surf_spots/<int:spot_id>', methods=['DELETE'])
+    @requires_auth('delete:surf_spots')
+    def delete_surf_spot(payload, spot_id):
+        try:
+            if type(payload) is AuthError:
+                return auth_error(payload)
+
+            else:
+                surfSpot = SurfSpot.query.get(spot_id)
+                if surfSpot is not None:
+                    # First find any contests associated with this Surf Spot
+                    print("Finding Contests...")
+
+                    # Delete Surf Contests
+                    surfSpotContests = surfSpot.contests
+                    if len(surfSpotContests):
+                        print("Found contests....deleting contests...")
+                        # Clean up surfers entered in each contest
+                        for surfContest in surfSpotContests:
+                            print("Found Surfers.....deleting surfers...")
+                            surfContest.surfers = []
+                            surfContest.update()
+                            surfContest.delete()
+
+                        surfSpot.contests = []
+                        surfSpot.update()
+
+                    # Delete the surf spot if all succeeds
+                    print("Deleting Surf Spot...")
+                    surfSpot.delete()
+                    print("Deleted Surf Spot...")
+
+                    surfSpots = SurfSpot.query.order_by(SurfSpot.id).all()
+                    listSurfSpots = []
+
+                    for spot in surfSpots:
+                        listSurfSpots.append(spot.format())
+
+                    return jsonify({
+                        "success": True,
+                        "deleted": spot_id,
+                        "surf_spot_count": len(listSurfSpots),
+                        "surf_spots": listSurfSpots
+                    })
+        except:
+            print(sys.exc_info())
+            rollback_db()
+            return jsonify({
+                    "success": False,
+                    "message": "Could not delete Surf Spot"
+                })
+
+    # DELETE route for removing (Cancelling/Postponing) Surf Contests
+    @app.route('/surf_contests/<int:contest_id>', methods=['DELETE'])
+    @requires_auth('delete:surf_contests')
+    def delete_surf_contest(payload, contest_id):
+        try:
+            if type(payload) is AuthError:
+                return auth_error(payload)
+
+            else:
+                surfContest = SurfContest.query.get(contest_id)
+                if surfContest is not None:
+                    # Delete Surf contestants (surfers)
+                    surfContest.surfers = []
+                    surfContest.update()
+
+                    # Delete this contest
+                    print("Deleting Contest...")
+                    surfContest.delete()
+                    print("Deleted Contest...")
+
+                    surfContests = SurfContest.query.order_by(SurfContest.id).all()
+                    listSurfContests = []
+
+                    for contest in surfContests:
+                        listSurfContests.append(contest.format())
+
+                    return jsonify({
+                        "success": True,
+                        "deleted": contest_id,
+                        "contest_count": len(surfContests),
+                        "surf_contests": listSurfContests
+                    })
+        except:
+            rollback_db()
+            print(sys.exc_info())
+            error = True
+
+
+    # Error Handlers for various API Error codes
+    @app.errorhandler(422)
+    def unprocessable(error):
+        return jsonify({
+            "success": False,
+            "error": 422,
+            "message": "unprocessable"
+        }), 422
+
+    @app.errorhandler(400)
+    def bad_request(error):
+        return jsonify({
+            "success": False,
+            "error": 400,
+            "message": "Bad Request."
+        }, 400)
+
+
+    @app.errorhandler(401)
+    def unauthorized(error):
+        return jsonify({
+            "success": False,
+            "error": 401,
+            "message": "Unauthorized."
+        }, 401)
+
+
+    @app.errorhandler(403)
+    def forbidden_error(error):
+        return jsonify({
+            "success": False,
+            "error": 403,
+            "message": "Content Forbidden."
+        }, 403)
+
+    @app.errorhandler(404)
+    def no_resource(error):
+        return jsonify({
+            "success": False,
+            "error": 404,
+            "message": "Resource not found"
+        }), 404
+
+    @app.errorhandler(AuthError)
+    def auth_error(authError):
+        return jsonify({
+            "success": False,
+            "error": authError.status_code,
+            "message": authError.error
+        }), authError.status_code
+
 
     return app
-
 app = create_app()
 
 if __name__ == '__main__':

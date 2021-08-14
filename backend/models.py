@@ -28,6 +28,13 @@ def setup_db(app, database_path=database_path):
     migrate = Migrate(app, db)
 
 '''
+rollback_db()
+    rolls back the db
+'''
+def rollback_db():
+    db.session.rollback()
+
+'''
 Surf Spot / Surf Location
 '''
 class SurfSpot(db.Model):
