@@ -35,6 +35,7 @@ def create_app(test_config=None):
             })
 
         except:
+            print(sys.exc_info())
             abort(400)
 
     @app.route('/surfers/<int:surfer_id>', methods=['GET'])
@@ -60,7 +61,6 @@ def create_app(test_config=None):
             surfspot_resp = []
             surfspots = SurfSpot.query.order_by(SurfSpot.id).all()
             for surfspot in surfspots:
-                print(surfspot.name)
                 surfspot_resp.append(surfspot.format())
             return jsonify({
                 "success": True,
@@ -353,7 +353,6 @@ def create_app(test_config=None):
                     createError = True
 
                 if not createError:
-                    print(surfSpot.name)
                     newContest = SurfContest(
                         name=contestName,
                         date=contestDate,
@@ -461,26 +460,20 @@ def create_app(test_config=None):
                 surfSpot = SurfSpot.query.get(spot_id)
                 if surfSpot is not None:
                     # First find any contests associated with this Surf Spot
-                    print("Finding Contests...")
-
-                    # Delete Surf Contests
                     surfSpotContests = surfSpot.contests
                     if len(surfSpotContests):
-                        print("Found contests....deleting contests...")
                         # Clean up surfers entered in each contest
                         for surfContest in surfSpotContests:
-                            print("Found Surfers.....deleting surfers...")
                             surfContest.surfers = []
                             surfContest.update()
                             surfContest.delete()
 
+                        # Delete Surf Contests
                         surfSpot.contests = []
                         surfSpot.update()
 
                     # Delete the surf spot if all succeeds
-                    print("Deleting Surf Spot...")
                     surfSpot.delete()
-                    print("Deleted Surf Spot...")
 
                     surfSpots = SurfSpot.query.order_by(SurfSpot.id).all()
                     listSurfSpots = []
@@ -518,9 +511,7 @@ def create_app(test_config=None):
                     surfContest.update()
 
                     # Delete this contest
-                    print("Deleting Contest...")
                     surfContest.delete()
-                    print("Deleted Contest...")
 
                     surfContests = SurfContest.query.order_by(SurfContest.id).all()
                     listSurfContests = []
