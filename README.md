@@ -1,6 +1,12 @@
 # Description
 
+FSND Surf now has an API for staff to mange the various surf events taking place around the globe.
+
 # API
+
+## Surf Events API Overview
+
+FSND-Surf is invested in creating an API that is available to the public, as well as official staff members. The public can now gain access to the information about our surf Events - including surfers, surf locations, and contests.
 
 ## PUBLIC API
 
